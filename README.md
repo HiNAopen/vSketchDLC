@@ -27,7 +27,7 @@ MXNet uses the priority variable as the division basis of DNN layer,
 so vSketchDLC can divide communications according to this variable.
 This feature of vSKetchDLC requires MXNet to simply add priority variables when using ps-lite.
 
-A simple example:
+A simple example in MXNet kvstore_dist.h:
 
 ```c++ MXNet kvstore_dist.h 
   auto pull_from_servers = [this, key, recv_buf, priority](
