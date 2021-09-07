@@ -2,11 +2,10 @@
 # vSketchDLC
 =======
 
-vSketchDLC is an open-sourced, fine-grained and user-friendly 
+vSketchDLC is a fine-grained and user-friendly 
 communication measurement tool implemented in ps-lite, which 
-is a light and efficient implementation of the parameter server framework, and 
+is a light and efficient implementation of the parameter server framework and 
 applied by deep learning frameworks such as MXNet.
-
 vSketchDLC can trace low-level communication events between 
 framework and communication library interface, and capture 
 end-to-end push and pull communications between workers and servers. 
