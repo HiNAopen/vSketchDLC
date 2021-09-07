@@ -27,7 +27,7 @@ MXNet uses the priority variable as the division basis of DNN layer,
 so vSketchDLC can divide communications according to this variable.
 This feature of vSKetchDLC requires MXNet to simply add priority variables when using ps-lite.
 
-A simple example in MXNet kvstore_dist.h:
+In MXNet kvstore_dist.h:
 
 ```c++ MXNet kvstore_dist.h 
   auto pull_from_servers = [this, key, recv_buf, priority](
@@ -37,56 +37,57 @@ A simple example in MXNet kvstore_dist.h:
 ```
 
 ZPull is a function in ps-lite, from which vSketchDLC gets the basis for dividing the DNN layer. 
-Accordingly, the place where ZPush is called in MXNet needs to be modified.
+Accordingly, in kvstore_dist.h, the place where ZPush and ZPull functions are called needs to be modified.
 
 - Fine-grained communication records
 
+MXNet profiler can only record operator-level communications, such as push operator and pull operator. 
+Instead, vSketchDLC can capture fine-grained low-level communication operations inside MXNet communication operators.
+In ps-lite, an communication operator actually performs two network transmissions and one server message processing.
 
-More features:
+vSketchDLC records time points in four functions of ps-lite in https://github.com/HiNAopen/vSketchDLC/blob/main/ps-lite/include/ps/kv_app.h 
+and https://github.com/HiNAopen/vSketchDLC/blob/main/ps-lite/include/ps/internal/customer.h
 
-- Flexible and high-performance communication: zero-copy push/pull, supporting
-  dynamic length values, user-defined filters for communication compression
-- Server-side programming: supporting user-defined handles on server nodes
+```c++ ps-lite kv_app.h
+  void KVWorker<Val>::Send(
+  ...
+  msg.meta.request_begin = obj_->timeline()->TimeFromUTC();
+```
+
+```c++ ps-lite customer.h
+  inline void Accept(Message& recved) {
+    // push/pull request/response end
+    if (recved.meta.request) {
+      recved.meta.request_end = this->timeline_->TimeFromUTC();
+    } else {
+      recved.meta.response_end = this->timeline_->TimeFromUTC();
+    }
+    recv_queue_.Push(recved);
+  }
+```
+
+```c++ ps-lite kv_app.h
+  KVServer<Val>::Response(
+  ...
+  msg.meta.request_begin = req.request_begin;
+  msg.meta.request_end = req.request_end;
+  msg.meta.response_begin = obj_->timeline()->TimeFromUTC();
+```
+
+```c++ ps-lite kv_app.h
+  void KVWorker<Val>::Process(
+  ...
+  obj_->timeline()->Write(msg.meta);
+```
+
+Compared with previous work SketchDLC and MXNet profiler, vSketchDLC not only visualizes communication records, 
+but also starts a asynchronous record thread on each worker to write files and avoid affecting training performance.
 
 ### Build
 
 `ps-lite` requires a C++11 compiler such as `g++ >= 4.8`. On Ubuntu >= 13.10, we
 can install it by
-```
-sudo apt-get update && sudo apt-get install -y build-essential git
-```
-Instructions for gcc 4.8 installation on other platforms:
-- [Ubuntu 12.04](http://ubuntuhandbook.org/index.php/2013/08/install-gcc-4-8-via-ppa-in-ubuntu-12-04-13-04/)
-- [Centos](http://linux.web.cern.ch/linux/devtoolset/)
-- [Mac Os X](http://hpc.sourceforge.net/).
-
-Then clone and build
 
 ```bash
-git clone https://github.com/dmlc/ps-lite
 cd ps-lite && make -j4
 ```
-
-### How to use
-
-`ps-lite` provides asynchronous communication for other projects: 
-  - Distributed deep neural networks:
-    [MXNet](https://github.com/dmlc/mxnet),
-    [CXXNET](https://github.com/dmlc/cxxnet),
-    [Minverva](https://github.com/minerva-developers/minerva), and
-    [BytePS](https://github.com/bytedance/byteps/)
-  - Distributed high dimensional inference, such as sparse logistic regression,
-    factorization machines:
-    [DiFacto](https://github.com/dmlc/difacto)
-    [Wormhole](https://github.com/dmlc/wormhole)
-
-
-### Research papers
-  1. Mu Li, Dave Andersen, Alex Smola, Junwoo Park, Amr Ahmed, Vanja Josifovski,
-     James Long, Eugene Shekita, Bor-Yiing
-     Su. [Scaling Distributed Machine Learning with the Parameter Server](http://www.cs.cmu.edu/~muli/file/parameter_server_osdi14.pdf). In
-     Operating Systems Design and Implementation (OSDI), 2014
-  2. Mu Li, Dave Andersen, Alex Smola, and Kai
-     Yu. [Communication Efficient Distributed Machine Learning with the Parameter Server](http://www.cs.cmu.edu/~muli/file/parameter_server_nips14.pdf). In
-     Neural Information Processing Systems (NIPS), 2014
->>>>>>> 50228ca (add vSketchDLC)
